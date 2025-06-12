@@ -1,0 +1,34 @@
+Build a Python based application server that demonstrates the core capabilities of OpenAI APIs by operating on files stored in Azure Blob Storage. This platform will serve as a showcase of AI agent capabilities such as summarization, sentiment analysis, document Q&A, keyword extraction, and translation this is REST APIs repo, no frontend required.
+
+following is storage account connection string 
+DefaultEndpointsProtocol=https;AccountName=storagetest12344;AccountKey=lqsllsU65jg1xYs8Wlu3CIvIrwPu8vAbnuWR6cZrm3pH0Qt7aFJid+NYR7CGvGfzitYLOPP7yxwm+AStxmNhwA==;EndpointSuffix=core.windows.net
+
+and OpenAI API key is 
+
+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
+
+
+The app will read files directly from blob URLs or paths
+
+AI Agent Capabilities (APIs to Develop)
+API Name	Description	OpenAI Feature Used	Input	Output
+/summarize	Summarizes a document into a short paragraph	GPT (ChatCompletion)	File	Text Summary
+/sentiment	Analyzes the tone/sentiment (positive, negative, neutral)	GPT (ChatCompletion)	File	Sentiment label + explanation
+/extract-keywords	Extracts important keywords from document	GPT (ChatCompletion)	File	List of keywords
+/translate	Translates file content to another language (e.g., English to Hindi)	GPT (ChatCompletion)	File + target language	Translated text
+/structure-data	Extracts structured data (e.g., name, date, amount)	GPT (ChatCompletion with few-shot examples)	File	JSON of key fields
+/detect-topics	Identifies the primary topics discussed in the document	GPT (ChatCompletion)	File	List of topics
+
+
+Each API will have have its own API_KEY
+
+something like below
+# API Keys for individual endpoints
+    API_KEYS = {
+        "/summarize":  "summarize-key-123"),
+        "/sentiment":  "sentiment-key-123"),
+        "/extract-keywords":  "keywords-key-123"),
+        "/translate":  "translate-key-123"),
+        "/structure-data": "structure-key-123"),
+        "/detect-topics":  "topics-key-123"),
+    }
