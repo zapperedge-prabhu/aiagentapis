@@ -1,5 +1,6 @@
 import logging
-from azure.storage.blob import BlobServiceClient
+from urllib.parse import urlparse  # ✅ REQUIRED for parsing blob URLs
+from azure.storage.blob import BlobServiceClient, BlobClient  # ⬅️ added BlobClient
 from azure.core.exceptions import ResourceNotFoundError
 from config import AZURE_STORAGE_CONNECTION_STRING
 
@@ -17,41 +18,44 @@ class AzureBlobStorage:
             logger.error(f"Failed to initialize Azure Blob Storage client: {e}")
             raise
 
+    def _is_sas_url(self, url: str) -> bool:
+        return url.startswith("https://") and "?" in url
+
     def download_blob_content(self, blob_url_or_path):
         """
         Download content from Azure Blob Storage
-        
+
         Args:
-            blob_url_or_path (str): Blob URL or path in format container/blob_name
-            
+            blob_url_or_path (str): Blob URL or path in format container/blob_name or full URL
+
         Returns:
             bytes: The blob content
         """
         try:
-            # Parse blob URL - only full URLs are supported
-            if not blob_url_or_path.startswith('https://'):
-                raise ValueError("Invalid file path. Only full Azure Blob Storage URLs are supported. Format: https://storagetest12344.blob.core.windows.net/container/filename.ext")
-            
-            # Extract container and blob name from URL
-            # Format: https://account.blob.core.windows.net/container/path/to/blob
-            url_parts = blob_url_or_path.split('/')
-            if len(url_parts) < 5:
-                raise ValueError("Invalid Azure Blob Storage URL format")
-            container_name = url_parts[3]  # First part after domain
-            blob_name = '/'.join(url_parts[4:])  # Remaining parts as blob path
-            
-            # Get blob client and download content
-            blob_client = self.blob_service_client.get_blob_client(
-                container=container_name, 
-                blob=blob_name
-            )
-            
+            if self._is_sas_url(blob_url_or_path):
+                blob_client = BlobClient.from_blob_url(blob_url_or_path)
+            elif blob_url_or_path.startswith("https://"):
+                # Parse URL manually to extract container/blob
+                parsed = urlparse(blob_url_or_path)
+                path_parts = parsed.path.lstrip("/").split("/", 1)
+                if len(path_parts) != 2:
+                    raise ValueError("Invalid blob URL format: missing container/blob_name")
+                container_name, blob_name = path_parts
+                blob_client = self.blob_service_client.get_blob_client(container=container_name, blob=blob_name)
+            else:
+                # fallback for container/blob_name format
+                parts = blob_url_or_path.split("/", 1)
+                if len(parts) != 2:
+                    raise ValueError("Invalid blob path format. Expected container/blob_name")
+                container_name, blob_name = parts
+                blob_client = self.blob_service_client.get_blob_client(container=container_name, blob=blob_name)
+
             blob_data = blob_client.download_blob()
             content = blob_data.readall()
-            
-            logger.info(f"Successfully downloaded blob: {container_name}/{blob_name}")
+
+            logger.info(f"Successfully downloaded blob: {blob_client.container_name}/{blob_client.blob_name}")
             return content
-            
+
         except ResourceNotFoundError:
             logger.error(f"Blob not found: {blob_url_or_path}")
             raise FileNotFoundError(f"Blob not found: {blob_url_or_path}")
@@ -62,38 +66,37 @@ class AzureBlobStorage:
     def get_blob_properties(self, blob_url_or_path):
         """
         Get blob properties including content type and size
-        
+
         Args:
             blob_url_or_path (str): Blob URL or path
-            
+
         Returns:
             dict: Blob properties
         """
         try:
-            # Parse blob URL - only full URLs are supported
-            if not blob_url_or_path.startswith('https://'):
-                raise ValueError("Invalid file path. Only full Azure Blob Storage URLs are supported. Format: https://storagetest12344.blob.core.windows.net/container/filename.ext")
-            
-            # Extract container and blob name from URL
-            # Format: https://account.blob.core.windows.net/container/path/to/blob
-            url_parts = blob_url_or_path.split('/')
-            if len(url_parts) < 5:
-                raise ValueError("Invalid Azure Blob Storage URL format")
-            container_name = url_parts[3]  # First part after domain
-            blob_name = '/'.join(url_parts[4:])  # Remaining parts as blob path
-            
-            blob_client = self.blob_service_client.get_blob_client(
-                container=container_name, 
-                blob=blob_name
-            )
-            
+            if self._is_sas_url(blob_url_or_path):
+                blob_client = BlobClient.from_blob_url(blob_url_or_path)
+            elif blob_url_or_path.startswith("https://"):
+                parsed = urlparse(blob_url_or_path)
+                path_parts = parsed.path.lstrip("/").split("/", 1)
+                if len(path_parts) != 2:
+                    raise ValueError("Invalid blob URL format: missing container/blob_name")
+                container_name, blob_name = path_parts
+                blob_client = self.blob_service_client.get_blob_client(container=container_name, blob=blob_name)
+            else:
+                parts = blob_url_or_path.split("/", 1)
+                if len(parts) != 2:
+                    raise ValueError("Invalid blob path format. Expected container/blob_name")
+                container_name, blob_name = parts
+                blob_client = self.blob_service_client.get_blob_client(container=container_name, blob=blob_name)
+
             properties = blob_client.get_blob_properties()
             
             return {
                 'content_type': properties.content_settings.content_type,
                 'size': properties.size,
                 'last_modified': properties.last_modified,
-                'name': blob_name
+                'name': blob_client.blob_name  # ⬅️ consistent with above
             }
             
         except Exception as e:
